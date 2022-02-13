@@ -360,6 +360,7 @@ fn main() {
                 elem_index += 1;
             }
         }
+        term.kd.sort_by(|&(k1, _), &(k2, _)| k1.cmp(&k2));
         terms.push(term);
     }
     terms.sort_by(|a: &Term, b: &Term| {
