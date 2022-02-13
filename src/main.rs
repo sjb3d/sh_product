@@ -397,6 +397,13 @@ fn main() {
     let mut addition_count = 0;
     for term in terms.iter() {
         let Term { i1, i2, .. } = *term;
+
+        print!("// [{i1},{i2}]: ");
+        term.kd
+            .iter()
+            .for_each_interspersed(|&(k, _)| print!("{k}"), || print!(","));
+        println!();
+
         if i1 == i2 {
             let i = i1;
 

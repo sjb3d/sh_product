@@ -32,9 +32,11 @@ void sh_product(float *c, const float *a, const float *b)
     const float C5 = 0.15607835f;
     const float C6 = 0.09013593f;
 
+    // [0,0]: 0
     t = a[0]*b[0];
     c[0] = C0*t;
 
+    // [1,1]: 0,6,8
     ta = C0*a[0] + (-C1)*a[6] + (-C2)*a[8];
     tb = C0*b[0] + (-C1)*b[6] + (-C2)*b[8];
     c[1] = ta*b[1] + tb*a[1];
@@ -43,6 +45,7 @@ void sh_product(float *c, const float *a, const float *b)
     c[6] = (-C1)*t;
     c[8] = (-C2)*t;
 
+    // [1,2]: 5
     ta = C2*a[5];
     tb = C2*b[5];
     c[1] += ta*b[2] + tb*a[2];
@@ -50,6 +53,7 @@ void sh_product(float *c, const float *a, const float *b)
     t = a[1]*b[2] + a[2]*b[1];
     c[5] = C2*t;
 
+    // [2,2]: 0,6
     ta = C0*a[0] + C3*a[6];
     tb = C0*b[0] + C3*b[6];
     c[2] += ta*b[2] + tb*a[2];
@@ -57,6 +61,7 @@ void sh_product(float *c, const float *a, const float *b)
     c[0] += C0*t;
     c[6] += C3*t;
 
+    // [1,3]: 4
     ta = C2*a[4];
     tb = C2*b[4];
     c[1] += ta*b[3] + tb*a[3];
@@ -64,6 +69,7 @@ void sh_product(float *c, const float *a, const float *b)
     t = a[1]*b[3] + a[3]*b[1];
     c[4] = C2*t;
 
+    // [2,3]: 7
     ta = C2*a[7];
     tb = C2*b[7];
     c[2] += ta*b[3] + tb*a[3];
@@ -71,6 +77,7 @@ void sh_product(float *c, const float *a, const float *b)
     t = a[2]*b[3] + a[3]*b[2];
     c[7] = C2*t;
 
+    // [3,3]: 0,6,8
     ta = C0*a[0] + (-C1)*a[6] + C2*a[8];
     tb = C0*b[0] + (-C1)*b[6] + C2*b[8];
     c[3] += ta*b[3] + tb*a[3];
@@ -79,6 +86,7 @@ void sh_product(float *c, const float *a, const float *b)
     c[6] += (-C1)*t;
     c[8] += C2*t;
 
+    // [4,4]: 0,6
     ta = C0*a[0] + (-C4)*a[6];
     tb = C0*b[0] + (-C4)*b[6];
     c[4] += ta*b[4] + tb*a[4];
@@ -86,6 +94,7 @@ void sh_product(float *c, const float *a, const float *b)
     c[0] += C0*t;
     c[6] += (-C4)*t;
 
+    // [4,5]: 7
     ta = C5*a[7];
     tb = C5*b[7];
     c[4] += ta*b[5] + tb*a[5];
@@ -93,6 +102,7 @@ void sh_product(float *c, const float *a, const float *b)
     t = a[4]*b[5] + a[5]*b[4];
     c[7] += C5*t;
 
+    // [5,5]: 0,6,8
     ta = C0*a[0] + C6*a[6] + (-C5)*a[8];
     tb = C0*b[0] + C6*b[6] + (-C5)*b[8];
     c[5] += ta*b[5] + tb*a[5];
@@ -101,6 +111,7 @@ void sh_product(float *c, const float *a, const float *b)
     c[6] += C6*t;
     c[8] += (-C5)*t;
 
+    // [6,6]: 0,6
     ta = C0*a[0];
     tb = C0*b[0];
     c[6] += ta*b[6] + tb*a[6];
@@ -108,6 +119,7 @@ void sh_product(float *c, const float *a, const float *b)
     c[0] += C0*t;
     c[6] += C4*t;
 
+    // [7,7]: 0,6,8
     ta = C0*a[0] + C6*a[6] + C5*a[8];
     tb = C0*b[0] + C6*b[6] + C5*b[8];
     c[7] += ta*b[7] + tb*a[7];
@@ -116,6 +128,7 @@ void sh_product(float *c, const float *a, const float *b)
     c[6] += C6*t;
     c[8] += C5*t;
 
+    // [8,8]: 0,6
     ta = C0*a[0] + (-C4)*a[6];
     tb = C0*b[0] + (-C4)*b[6];
     c[8] += ta*b[8] + tb*a[8];
