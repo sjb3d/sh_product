@@ -1,8 +1,6 @@
 use rayon::prelude::*;
 use std::{f64::consts::*, mem};
 
-use rayon::iter::IntoParallelIterator;
-
 trait Factorial {
     fn factorial(self) -> Self;
 }
@@ -498,8 +496,8 @@ fn main() {
         }
         println!();
     }
-    for i in 0..COEFF_COUNT {
-        if !output_written[i] {
+    for (i, &written) in output_written.iter().enumerate() {
+        if !written {
             println!("c[{i}] = 0.f;");
         }
     }
