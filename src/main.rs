@@ -1,4 +1,7 @@
+use rayon::prelude::*;
 use std::{f64::consts::*, mem};
+
+use rayon::iter::IntoParallelIterator;
 
 trait Factorial {
     fn factorial(self) -> Self;
@@ -62,8 +65,6 @@ fn integrate<F>(f: F) -> f64
 where
     F: Fn(f64, f64, f64) -> f64,
 {
-    const PHI_STEPS: usize = 512;
-    const COS_THETA_STEPS: usize = PHI_STEPS / 2;
     let mut sum = 0.0;
     for cos_theta_index in 0..COS_THETA_STEPS {
         let cos_theta = 1.0 - 2.0 * ((cos_theta_index as f64) + 0.5) / (COS_THETA_STEPS as f64);
@@ -276,13 +277,20 @@ where
 const MAX_ORDER: usize = 2;
 const COEFF_COUNT: usize = (MAX_ORDER + 1) * (MAX_ORDER + 1);
 
+// number of integral steps
+const PHI_STEPS: usize = 512;
+const COS_THETA_STEPS: usize = PHI_STEPS / 2;
+
 const TOLERANCE: f64 = 0.001;
 
 fn main() {
     // numerically integrate all unique pairs, check results
-    for i1 in 0..COEFF_COUNT {
-        let (l1, m1) = lm_from_index(i1);
-        for i2 in i1..COEFF_COUNT {
+    println!("Checking product integrals...");
+    (0..COEFF_COUNT)
+        .into_par_iter()
+        .flat_map(|i1| (i1..COEFF_COUNT).into_par_iter().map(move |i2| (i1, i2)))
+        .for_each(|(i1, i2)| {
+            let (l1, m1) = lm_from_index(i1);
             let (l2, m2) = lm_from_index(i2);
             let integral = integrate(|phi, cos_theta, sin_theta| {
                 spherical_harmonic(l1, m1, phi, cos_theta, sin_theta)
@@ -295,28 +303,39 @@ fn main() {
                     l1, m1, l2, m2, integral, expected
                 );
             }
-        }
-    }
+        });
 
     // numerically integrate all unique triples, gather non-zero ones
+    println!("Computing triple product integrals...");
+    let integrals: Vec<(usize, usize, usize, f64)> = (0..COEFF_COUNT)
+        .into_par_iter()
+        .flat_map(|i1| (i1..COEFF_COUNT).into_par_iter().map(move |i2| (i1, i2)))
+        .flat_map(|(i1, i2)| {
+            (i2..COEFF_COUNT)
+                .into_par_iter()
+                .map(move |i3| (i1, i2, i3))
+        })
+        .filter_map(|(i1, i2, i3)| {
+            let (l1, m1) = lm_from_index(i1);
+            let (l2, m2) = lm_from_index(i2);
+            let (l3, m3) = lm_from_index(i3);
+            let integral = integrate(|phi, cos_theta, sin_theta| {
+                spherical_harmonic(l1, m1, phi, cos_theta, sin_theta)
+                    * spherical_harmonic(l2, m2, phi, cos_theta, sin_theta)
+                    * spherical_harmonic(l3, m3, phi, cos_theta, sin_theta)
+            });
+            if integral.abs() > TOLERANCE {
+                Some((i1, i2, i3, integral))
+            } else {
+                None
+            }
+        })
+        .collect();
+    println!("Done! Found {} non-zero terms.", integrals.len());
     let mut constants = ConstantStore::new();
     let mut elements = Vec::<Element>::new();
-    for i1 in 0..COEFF_COUNT {
-        let (l1, m1) = lm_from_index(i1);
-        for i2 in i1..COEFF_COUNT {
-            let (l2, m2) = lm_from_index(i2);
-            for i3 in i2..COEFF_COUNT {
-                let (l3, m3) = lm_from_index(i3);
-                let integral = integrate(|phi, cos_theta, sin_theta| {
-                    spherical_harmonic(l1, m1, phi, cos_theta, sin_theta)
-                        * spherical_harmonic(l2, m2, phi, cos_theta, sin_theta)
-                        * spherical_harmonic(l3, m3, phi, cos_theta, sin_theta)
-                });
-                if integral.abs() > TOLERANCE {
-                    elements.push(Element::new(i1, i2, i3, constants.add(integral)));
-                }
-            }
-        }
+    for &(i1, i2, i3, integral) in integrals.iter() {
+        elements.push(Element::new(i1, i2, i3, constants.add(integral)));
     }
 
     // greedy pair algorithm
@@ -345,15 +364,14 @@ fn main() {
         }
         terms.push(term);
     }
-
-    // sort and emit the terms
-    // ref: "Code Generation and Factoring for Fast Evaluation of Low-order Spherical Harmonic Products and Squares" by John Snyder
     terms.sort_by(|a: &Term, b: &Term| {
         if a.i2 != b.i2 {
             return a.i2.cmp(&b.i2);
         };
         a.i1.cmp(&b.i1)
     });
+
+    // emit the terms
     for (index, &value) in constants.unique_abs_values.iter().enumerate() {
         let value = value as f32;
         println!("const float C{index} = {value}f;");
@@ -376,12 +394,15 @@ fn main() {
             print!("c[{i}] = ")
         }
     };
+    let mut multiply_count = 0;
+    let mut addition_count = 0;
     for term in terms.iter() {
         let Term { i1, i2, .. } = *term;
         if i1 == i2 {
             let i = i1;
 
-            if term.kd.iter().any(|&(k, _)| k != i) {
+            let n = term.kd.iter().filter(|&&(k, _)| k != i).count();
+            if n != 0 {
                 print!("ta = ");
                 term.kd
                     .iter()
@@ -394,6 +415,8 @@ fn main() {
                         || print!(" + "),
                     );
                 println!(";");
+                multiply_count += n;
+                addition_count += n - 1;
 
                 print!("tb = ");
                 term.kd
@@ -407,16 +430,25 @@ fn main() {
                         || print!(" + "),
                     );
                 println!(";");
+                multiply_count += n;
+                addition_count += n - 1;
 
                 print_accumulate(i);
                 println!("ta*b[{i}] + tb*a[{i}];");
+                multiply_count += 2;
+                addition_count += 2; // includes accumulate
             }
+
             println!("t = a[{i}]*b[{i}];");
+            multiply_count += 1;
+
             term.kd.iter().for_each(|&(k, d)| {
                 print_accumulate(k);
                 print_cref(d);
                 println!("*t;");
             });
+            multiply_count += term.kd.len();
+            addition_count += term.kd.len(); // accumulate
         } else {
             print!("ta = ");
             term.kd.iter().for_each_interspersed(
@@ -427,6 +459,8 @@ fn main() {
                 || print!(" + "),
             );
             println!(";");
+            multiply_count += term.kd.len();
+            addition_count += term.kd.len() - 1;
 
             print!("tb = ");
             term.kd.iter().for_each_interspersed(
@@ -437,18 +471,30 @@ fn main() {
                 || print!(" + "),
             );
             println!(";");
+            multiply_count += term.kd.len();
+            addition_count += term.kd.len() - 1;
 
             print_accumulate(i1);
             println!("ta*b[{i2}] + tb*a[{i2}];");
+            multiply_count += 2;
+            addition_count += 2; // includes accumulate
+
             print_accumulate(i2);
             println!("ta*b[{i1}] + tb*a[{i1}];");
+            multiply_count += 2;
+            addition_count += 2; // includes accumulate
 
             println!("t = a[{i1}]*b[{i2}] + a[{i2}]*b[{i1}];");
+            multiply_count += 2;
+            addition_count += 1;
+
             term.kd.iter().for_each(|&(k, d)| {
                 print_accumulate(k);
                 print_cref(d);
                 println!("*t;");
             });
+            multiply_count += term.kd.len();
+            addition_count += term.kd.len(); // accumulate
         }
         println!();
     }
@@ -457,4 +503,7 @@ fn main() {
             println!("c[{i}] = 0.f;");
         }
     }
+    addition_count -= COEFF_COUNT; // first accumulate is assignment
+    println!("// multiply count = {multiply_count}");
+    println!("// addition count = {addition_count}");
 }
