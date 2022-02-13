@@ -62,7 +62,7 @@ fn integrate<F>(f: F) -> f64
 where
     F: Fn(f64, f64, f64) -> f64,
 {
-    const PHI_STEPS: usize = 256;
+    const PHI_STEPS: usize = 512;
     const COS_THETA_STEPS: usize = PHI_STEPS / 2;
     let mut sum = 0.0;
     for cos_theta_index in 0..COS_THETA_STEPS {
@@ -354,11 +354,12 @@ fn main() {
         };
         a.i1.cmp(&b.i1)
     });
-    for (index, value) in constants.unique_abs_values.iter().enumerate() {
+    for (index, &value) in constants.unique_abs_values.iter().enumerate() {
+        let value = value as f32;
         println!("const float C{index} = {value}f;");
     }
     println!();
-    let print_cref = |d: &ConstantReference| {
+    let print_cref = |d: ConstantReference| {
         let index = d.index;
         if d.is_negated {
             print!("(-C{index})")
@@ -366,18 +367,27 @@ fn main() {
             print!("C{index}")
         }
     };
+    let mut output_written = [false; COEFF_COUNT];
+    let mut print_accumulate = |i: usize| {
+        if output_written[i] {
+            print!("c[{i}] += ")
+        } else {
+            output_written[i] = true;
+            print!("c[{i}] = ")
+        }
+    };
     for term in terms.iter() {
-        let Term { i1, i2, .. } = term;
+        let Term { i1, i2, .. } = *term;
         if i1 == i2 {
             let i = i1;
 
-            if term.kd.iter().any(|(k, _)| k != i) {
+            if term.kd.iter().any(|&(k, _)| k != i) {
                 print!("ta = ");
                 term.kd
                     .iter()
-                    .filter(|(k, _)| k != i)
+                    .filter(|&&(k, _)| k != i)
                     .for_each_interspersed(
-                        |(k, d)| {
+                        |&(k, d)| {
                             print_cref(d);
                             print!("*a[{k}]");
                         },
@@ -388,9 +398,9 @@ fn main() {
                 print!("tb = ");
                 term.kd
                     .iter()
-                    .filter(|(k, _)| k != i)
+                    .filter(|&&(k, _)| k != i)
                     .for_each_interspersed(
-                        |(k, d)| {
+                        |&(k, d)| {
                             print_cref(d);
                             print!("*b[{k}]");
                         },
@@ -398,18 +408,19 @@ fn main() {
                     );
                 println!(";");
 
-                println!("c[{i}] += ta*b[{i}] + tb*a[{i}];");
+                print_accumulate(i);
+                println!("ta*b[{i}] + tb*a[{i}];");
             }
             println!("t = a[{i}]*b[{i}];");
-            term.kd.iter().for_each(|(k, d)| {
-                print!("c[{k}] += ");
+            term.kd.iter().for_each(|&(k, d)| {
+                print_accumulate(k);
                 print_cref(d);
                 println!("*t;");
             });
         } else {
             print!("ta = ");
             term.kd.iter().for_each_interspersed(
-                |(k, d)| {
+                |&(k, d)| {
                     print_cref(d);
                     print!("*a[{k}]");
                 },
@@ -419,7 +430,7 @@ fn main() {
 
             print!("tb = ");
             term.kd.iter().for_each_interspersed(
-                |(k, d)| {
+                |&(k, d)| {
                     print_cref(d);
                     print!("*b[{k}]");
                 },
@@ -427,16 +438,23 @@ fn main() {
             );
             println!(";");
 
-            println!("c[{i1}] += ta*b[{i2}] + tb*a[{i2}];");
-            println!("c[{i2}] += ta*b[{i1}] + tb*a[{i1}];");
-            
+            print_accumulate(i1);
+            println!("ta*b[{i2}] + tb*a[{i2}];");
+            print_accumulate(i2);
+            println!("ta*b[{i1}] + tb*a[{i1}];");
+
             println!("t = a[{i1}]*b[{i2}] + a[{i2}]*b[{i1}];");
-            term.kd.iter().for_each(|(k, d)| {
-                print!("c[{k}] += ");
+            term.kd.iter().for_each(|&(k, d)| {
+                print_accumulate(k);
                 print_cref(d);
                 println!("*t;");
             });
         }
         println!();
+    }
+    for i in 0..COEFF_COUNT {
+        if !output_written[i] {
+            println!("c[{i}] = 0.f;");
+        }
     }
 }
